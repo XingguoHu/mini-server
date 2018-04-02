@@ -1,12 +1,13 @@
 const http = require('http');
 const composeMiddleWare = require('./composeMiddleWare');
+const EventEmitter = require('events');
 
 /**
  * 
  * 
  * @class Application
  */
-class Application {
+class Application extends EventEmitter{
     /**
      * Creates an instance of Application.
      * 
@@ -14,6 +15,7 @@ class Application {
      * @memberof Application
      */
     constructor() {
+        super();
         this.middleWare = [];
         this.use = this.use.bind(this);
         this.callBack = this.callBack.bind(this);
@@ -30,8 +32,10 @@ class Application {
         //处理中间件,保证中间件的调用顺序
         const fn = composeMiddleWare(this.middleWare);
         const server = http.createServer(this.callBack(fn));
-        console.log(args)
         server.listen(...args);
+        if (!this.listenerCount('error')){
+            this.on('error', this.onError)
+        }
     }
 
     /**
@@ -54,11 +58,20 @@ class Application {
      * @memberof Application
      */
     callBack(fn) {
-        return (res, req) =>{
-            fn().then(_ =>{
-                console.log('end')
-            });
+        return async (req, res) =>{
+            try{
+                await fn();
+            }catch(error){
+                this.emit('error', error);
+                if (!res.status || typeof res.status !== 'number'){
+                    res.statusCode = 500;
+                }
+                res.end(error.message || '')
+            } 
         };
+    }
+    onError(err){
+        console.log(err)
     }
 }
 
@@ -67,6 +80,7 @@ const app = new Application();
 
 app.use(async function (ctx, next) {
     await next();
+    throw new Error('ff')
     console.log(2);
 });
 
